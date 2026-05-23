@@ -7,6 +7,8 @@ interface LoginProps {
   onLogin: (user: User) => void;
 }
 
+.
+
 export default function Login({ onLogin }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
