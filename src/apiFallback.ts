@@ -198,7 +198,7 @@ const parseExcelFile = (file: File): Promise<any[][]> => {
 export function initApiFallback() {
   const originalFetch = window.fetch;
 
-  window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const customFetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const urlStr = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : (input as Request).url);
 
     // Only intercept requests directed to "/api"
@@ -660,4 +660,18 @@ export function initApiFallback() {
 
     return originalFetch(input, init);
   };
+
+  try {
+    Object.defineProperty(window, 'fetch', {
+      value: customFetch,
+      writable: true,
+      configurable: true
+    });
+  } catch (e) {
+    try {
+      window.fetch = customFetch;
+    } catch (err) {
+      console.warn('Could not override window.fetch safely:', err);
+    }
+  }
 }
