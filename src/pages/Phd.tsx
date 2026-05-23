@@ -119,7 +119,7 @@ export default function Phd({ user }: { user: User }) {
     </thead>
   );
 
-  const ScholarRow = ({ scholar }: { scholar: PhdScholar }) => (
+  const ScholarRow = ({ scholar }: { scholar: PhdScholar; key?: string }) => (
     <motion.tr 
       layout
       initial={{ opacity: 0 }}
@@ -311,7 +311,7 @@ export default function Phd({ user }: { user: User }) {
               </table>
             ) : (
               <div className="divide-y divide-gray-100">
-                {Object.entries(groupedPhd).map(([branch, scholars]) => (
+                {(Object.entries(groupedPhd) as [string, PhdScholar[]][]).map(([branch, scholars]) => (
                   <div key={branch} className="bg-white">
                     <div className="bg-gray-50 px-6 py-3 border-y border-gray-100 flex justify-between items-center sticky top-0 z-10 shadow-sm">
                       <h3 className="text-[12px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">

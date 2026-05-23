@@ -67,7 +67,6 @@ export default function Passouts({ user }: { user: User }) {
         setUploadSuccess(true);
         setSelectedSource(result.filename);
         fetchPassouts();
-        fetchLogs();
         setSelectedFile(null);
         setTimeout(() => setUploadSuccess(false), 3000);
       } else {
@@ -168,7 +167,7 @@ export default function Passouts({ user }: { user: User }) {
     </thead>
   );
 
-  const StudentRow = ({ student }: { student: Student }) => (
+  const StudentRow = ({ student }: { student: Student; key?: string }) => (
     <tr 
       key={student.id} 
       onClick={() => setSelectedStudent(student)}
@@ -404,7 +403,7 @@ export default function Passouts({ user }: { user: User }) {
                 </table>
               ) : (
                 <div className="divide-y divide-gray-100">
-                  {Object.entries(groupedPassouts).map(([branch, students]) => (
+                  {(Object.entries(groupedPassouts) as [string, Student[]][]).map(([branch, students]) => (
                     <div key={branch} className="bg-white">
                       <div className="bg-gray-50 px-6 py-3 border-y border-gray-100 flex justify-between items-center sticky top-0 z-10 shadow-sm">
                         <h3 className="text-[12px] font-black text-hkbk-blue uppercase tracking-widest flex items-center gap-2">
