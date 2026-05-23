@@ -22,7 +22,7 @@ export default function Login({ onLogin }: LoginProps) {
     setError('');
 
     const allowedEmails = ['sadath@hkbk.edu.in', 'tabassum.ara@hkbk.edu.in'];
-    const validPassword = '1234';
+    const validPassword = '1234567';
 
     // Simulate auth check
     setTimeout(() => {
