@@ -84,7 +84,7 @@ async function startServer() {
     { id: "p16", rollNo: "1HK21ME008", name: "Mohammed Affan Khan", department: "Mechanical Engineering", semester: 8, batch: "2021-25", gender: "MALE", category: "MGT", status: "PASSOUT", passoutYear: "May-25", obtainClass: "FCD", cgpa: 7.69, scheme: "2021" },
   ];
 
-  let rawStudents = loadData(STUDENTS_FILE, require('./students_data.json'));
+  let rawStudents = loadData(STUDENTS_FILE, JSON.parse(fs.readFileSync(path.join(process.cwd(), 'students_data.json'), 'utf8')));
   
   // Migration logic: fix semesters for existing data if they are defaulting to 1
   rawStudents = rawStudents.map((s: any) => {
