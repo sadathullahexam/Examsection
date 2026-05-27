@@ -2,5 +2,7 @@
   "name": "Welcome to HKBKCE, Examination Section",
   "description": "Secure Exam Section management system for HKBK College of Engineering, featuring results tracking, student lists, and alumni management.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
