@@ -139,8 +139,28 @@ const setLocal = (key: string, data: any) => {
 
 // Main dynamic database loaded from LocalStorage
 const getDb = () => {
+  const getResultKey = (r: any) => {
+    const usn = String(r.rollNo || '').trim().toUpperCase();
+    const course = String(r.courseCode || r.courseName || '').trim().toUpperCase();
+    const sem = String(r.semester || '1');
+    return `${usn}_${course}_${sem}`;
+  };
+
+  const dedupList = (arr: any[], keyFn: (item: any) => string) => {
+    const seen = new Set();
+    const unique: any[] = [];
+    for (const item of arr) {
+      const key = keyFn(item);
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        unique.push(item);
+      }
+    }
+    return unique;
+  };
+
   // Normalize and apply migrations similar to server.ts
-  let students = getLocal('hkbk_students', studentsDataRaw).map((s: any) => {
+  let studentsRaw = getLocal('hkbk_students', studentsDataRaw).map((s: any) => {
     if (!s.id) s.id = Math.random().toString(36).substr(2, 9);
     if (!s.semester) {
       const upperUsn = String(s.rollNo).toUpperCase();
@@ -151,15 +171,27 @@ const getDb = () => {
     }
     return s;
   });
+  let students = dedupList(studentsRaw, s => String(s.rollNo).trim().toUpperCase());
 
-  let passouts = getLocal('hkbk_passouts', initialPassouts).map((s: any) => {
+  let passoutsRaw = getLocal('hkbk_passouts', initialPassouts).map((s: any) => {
     if (!s.scheme) s.scheme = '2021';
     return s;
   });
+  let passouts = dedupList(passoutsRaw, s => String(s.rollNo).trim().toUpperCase());
 
-  let phd = getLocal('hkbk_phd', initialPhd);
-  let results = getLocal('hkbk_results', initialResults);
+  let phdRaw = getLocal('hkbk_phd', initialPhd);
+  let phd = dedupList(phdRaw, s => String(s.rollNo).trim().toUpperCase());
+
+  let resultsRaw = getLocal('hkbk_results', initialResults);
+  let results = dedupList(resultsRaw, getResultKey);
+
   let logs = getLocal('hkbk_logs', defaultLogs);
+
+  // Sync back deduplicated clean lists
+  setLocal('hkbk_students', students);
+  setLocal('hkbk_passouts', passouts);
+  setLocal('hkbk_phd', phd);
+  setLocal('hkbk_results', results);
 
   return { students, passouts, phd, results, logs };
 };
@@ -396,18 +428,27 @@ export function initApiFallback() {
             };
           });
 
-        const updatedStudents = [...newStudents, ...db.students];
-        setLocal('hkbk_students', updatedStudents);
+        const combinedStudents = [...newStudents, ...db.students];
+        const uniqueStudents: any[] = [];
+        const seen = new Set();
+        for (const s of combinedStudents) {
+          const key = String(s.rollNo).trim().toUpperCase();
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            uniqueStudents.push(s);
+          }
+        }
+        setLocal('hkbk_students', uniqueStudents);
 
         const newLog = {
           id: Math.random().toString(36).substr(2, 9),
           action: 'Eligible List Upload',
-          details: `Imported ${newStudents.length} student records from ${file.name}`,
+          details: `Imported ${uniqueStudents.length - db.students.length} new student records from ${file.name}`,
           timestamp: new Date().toISOString()
         };
         setLocal('hkbk_logs', [newLog, ...db.logs]);
 
-        return new Response(JSON.stringify({ success: true, count: newStudents.length, filename: file.name }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ success: true, count: uniqueStudents.length - db.students.length, filename: file.name }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       } catch (err: any) {
         return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
       }
@@ -488,18 +529,27 @@ export function initApiFallback() {
             };
           });
 
-        const updatedPassouts = [...newPassouts, ...db.passouts];
-        setLocal('hkbk_passouts', updatedPassouts);
+        const combinedPassouts = [...newPassouts, ...db.passouts];
+        const uniquePassouts: any[] = [];
+        const seenPassouts = new Set();
+        for (const p of combinedPassouts) {
+          const key = String(p.rollNo).trim().toUpperCase();
+          if (key && !seenPassouts.has(key)) {
+            seenPassouts.add(key);
+            uniquePassouts.push(p);
+          }
+        }
+        setLocal('hkbk_passouts', uniquePassouts);
 
         const newLog = {
           id: Math.random().toString(36).substr(2, 9),
           action: 'Passouts List Upload',
-          details: `Imported ${newPassouts.length} passout student records from ${file.name}`,
+          details: `Imported ${uniquePassouts.length - db.passouts.length} new passout student records from ${file.name}`,
           timestamp: new Date().toISOString()
         };
         setLocal('hkbk_logs', [newLog, ...db.logs]);
 
-        return new Response(JSON.stringify({ success: true, count: newPassouts.length, filename: file.name }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ success: true, count: uniquePassouts.length - db.passouts.length, filename: file.name }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       } catch (err: any) {
         return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
       }
@@ -563,18 +613,27 @@ export function initApiFallback() {
             };
           });
 
-        const updatedPhd = [...newPhd, ...db.phd];
-        setLocal('hkbk_phd', updatedPhd);
+        const combinedPhd = [...newPhd, ...db.phd];
+        const uniquePhd: any[] = [];
+        const seenPhd = new Set();
+        for (const p of combinedPhd) {
+          const key = String(p.rollNo).trim().toUpperCase();
+          if (key && !seenPhd.has(key)) {
+            seenPhd.add(key);
+            uniquePhd.push(p);
+          }
+        }
+        setLocal('hkbk_phd', uniquePhd);
 
         const newLog = {
           id: Math.random().toString(36).substr(2, 9),
           action: 'PHD Scholars List Upload',
-          details: `Imported ${newPhd.length} PHD records from ${file.name}`,
+          details: `Imported ${uniquePhd.length - db.phd.length} new PHD records from ${file.name}`,
           timestamp: new Date().toISOString()
         };
         setLocal('hkbk_logs', [newLog, ...db.logs]);
 
-        return new Response(JSON.stringify({ success: true, count: newPhd.length, filename: file.name }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ success: true, count: uniquePhd.length - db.phd.length, filename: file.name }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       } catch (err: any) {
         return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
       }
@@ -587,41 +646,97 @@ export function initApiFallback() {
         const file = formData?.get('file') as File;
         if (!file) throw new Error('No file shared');
 
-        // Parse Results
         const rows = await parseExcelFile(file);
         
-        // Simulating the server's standard format processing or just auto-generating random items for results representation:
-        const parsedCount = rows.length > 5 ? rows.length : 12; 
-        const testResultsToAdd: any[] = [];
-        for (let i = 0; i < parsedCount; i++) {
-          testResultsToAdd.push({
-            id: Math.random().toString(36).substr(2, 9),
-            rollNo: `1HK25CS${String(i + 1).padStart(3, '0')}`,
-            studentName: `Student CS ${i + 1}`,
-            courseCode: '21CS81',
-            courseName: 'Cloud Computing',
-            internalMarks: 25 + Math.floor(Math.random() * 15),
-            externalMarks: 35 + Math.floor(Math.random() * 45),
-            total: 60 + Math.floor(Math.random() * 35),
-            batch: '2025',
-            classification: 'Distinction',
-            sourceFile: file.name,
-            uploadedAt: new Date().toISOString()
-          });
+        let headerIndex = 0;
+        for (let i = 0; i < Math.min(rows.length, 10); i++) {
+          const rowValues = rows[i].map(v => String(v).toLowerCase());
+          if (rowValues.includes('reg. no.') || rowValues.includes('usn') || rowValues.includes('roll no') || rowValues.includes('student name')) {
+            headerIndex = i;
+            break;
+          }
         }
 
-        const updatedResults = [...testResultsToAdd, ...db.results];
-        setLocal('hkbk_results', updatedResults);
+        const headers = rows[headerIndex] || [];
+        const dataRows = rows.slice(headerIndex + 1);
+        
+        const getClassification = (percentage: number) => {
+          if (percentage >= 70) return 'Distinction';
+          if (percentage >= 60) return 'First Class';
+          if (percentage >= 50) return 'Second Class';
+          if (percentage >= 40) return 'Pass';
+          return 'Fail';
+        };
+
+        const extractedResults = dataRows
+          .filter(row => row.length > 0 && (row[1] || row[2]))
+          .map((rowArr: any[]) => {
+            const row: any = {};
+            headers.forEach((h: any, idx: number) => {
+              const headerKey = h ? String(h).trim() : `Col${idx}`;
+              row[headerKey] = rowArr[idx];
+            });
+
+            const findValue = (possibleKeys: string[]) => {
+              for (const key of possibleKeys) {
+                const rowKey = Object.keys(row).find(rk => rk.toLowerCase().trim() === key.toLowerCase().trim());
+                if (rowKey && row[rowKey] !== undefined) return row[rowKey];
+              }
+              return null;
+            };
+
+            const usn = findValue(['Reg. No.', 'USN', 'rollNo', 'Roll No', 'RollNumber']) || 'NA';
+            const name = findValue(['Name of the Student', 'Student Name', 'Name', 'student_name']) || 'Unknown Student';
+            const internal = findValue(['Internal Marks', 'Internal', 'CIA']) || 0;
+            const external = findValue(['External Marks', 'External', 'SEE']) || 0;
+            const total = parseFloat(String(internal)) + parseFloat(String(external));
+
+            return {
+              id: Math.random().toString(36).substr(2, 9),
+              rollNo: String(usn).trim(),
+              studentName: String(name).trim(),
+              courseCode: row.courseCode || row.Code || 'SUB001',
+              courseName: row.courseName || row.Course || 'Unnamed Subject',
+              internalMarks: parseFloat(String(internal)) || 0,
+              externalMarks: parseFloat(String(external)) || 0,
+              total,
+              percentage: total,
+              classification: getClassification(total),
+              semester: parseInt(row.semester || row.Semester) || 1,
+              batch: row.batch || row.Batch || '2024',
+              sourceFile: file.name,
+              uploadedAt: new Date().toISOString()
+            };
+          });
+
+        const getResultKey = (r: any) => {
+          const usn = String(r.rollNo || '').trim().toUpperCase();
+          const course = String(r.courseCode || r.courseName || '').trim().toUpperCase();
+          const sem = String(r.semester || '1');
+          return `${usn}_${course}_${sem}`;
+        };
+
+        const combinedResults = [...extractedResults, ...db.results];
+        const uniqueResults: any[] = [];
+        const seenResults = new Set();
+        for (const r of combinedResults) {
+          const key = getResultKey(r);
+          if (key && !seenResults.has(key)) {
+            seenResults.add(key);
+            uniqueResults.push(r);
+          }
+        }
+        setLocal('hkbk_results', uniqueResults);
 
         const newLog = {
           id: Math.random().toString(36).substr(2, 9),
           action: 'Result Excel Upload',
-          details: `Uploaded and parsed result sheet of ${testResultsToAdd.length} records from ${file.name}`,
+          details: `Uploaded and parsed result sheet of ${extractedResults.length} records from ${file.name}`,
           timestamp: new Date().toISOString()
         };
         setLocal('hkbk_logs', [newLog, ...db.logs]);
 
-        return new Response(JSON.stringify({ success: true, count: testResultsToAdd.length, filename: file.name }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ success: true, count: extractedResults.length, filename: file.name }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       } catch (err: any) {
         return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
       }

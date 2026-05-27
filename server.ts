@@ -27,6 +27,7 @@ async function startServer() {
   const STUDENTS_FILE = path.join(DATA_PATH, 'students.json');
   const PASSOUTS_FILE = path.join(DATA_PATH, 'passouts.json');
   const PHD_FILE = path.join(DATA_PATH, 'phd.json');
+  const RESULTS_FILE = path.join(DATA_PATH, 'results.json');
 
   const loadData = (filePath: string, initial: any) => {
     if (fs.existsSync(filePath)) {
@@ -41,6 +42,26 @@ async function startServer() {
 
   const saveData = (filePath: string, data: any) => {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  };
+
+  const getResultKey = (r: any) => {
+    const usn = String(r.rollNo || '').trim().toUpperCase();
+    const course = String(r.courseCode || r.courseName || '').trim().toUpperCase();
+    const sem = String(r.semester || '1');
+    return `${usn}_${course}_${sem}`;
+  };
+
+  const dedupList = (arr: any[], keyFn: (item: any) => string) => {
+    const seen = new Set();
+    const unique: any[] = [];
+    for (const item of arr) {
+      const key = keyFn(item);
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        unique.push(item);
+      }
+    }
+    return unique;
   };
 
   // Add some sample passouts
@@ -63,10 +84,10 @@ async function startServer() {
     { id: "p16", rollNo: "1HK21ME008", name: "Mohammed Affan Khan", department: "Mechanical Engineering", semester: 8, batch: "2021-25", gender: "MALE", category: "MGT", status: "PASSOUT", passoutYear: "May-25", obtainClass: "FCD", cgpa: 7.69, scheme: "2021" },
   ];
 
-  let students = loadData(STUDENTS_FILE, require('./students_data.json'));
+  let rawStudents = loadData(STUDENTS_FILE, require('./students_data.json'));
   
   // Migration logic: fix semesters for existing data if they are defaulting to 1
-  students = students.map((s: any) => {
+  rawStudents = rawStudents.map((s: any) => {
     if (s.semester === 1 || !s.semester) {
       const upperUsn = String(s.rollNo).toUpperCase();
       if (upperUsn.includes('25')) s.semester = 2;
@@ -77,15 +98,19 @@ async function startServer() {
     return s;
   });
   
-  let passoutStudents = loadData(PASSOUTS_FILE, samplePassouts);
+  let students = dedupList(rawStudents, s => String(s.rollNo).trim().toUpperCase());
+
+  let rawPassoutStudents = loadData(PASSOUTS_FILE, samplePassouts);
   
   // Migration for passouts: fix schemes if missing
-  passoutStudents = passoutStudents.map((s: any) => {
+  rawPassoutStudents = rawPassoutStudents.map((s: any) => {
     if (!s.scheme) s.scheme = "2021";
     return s;
   });
 
-  let phdStudents = loadData(PHD_FILE, [
+  let passoutStudents = dedupList(rawPassoutStudents, s => String(s.rollNo).trim().toUpperCase());
+
+  const defaultPhd = [
     { id: "phd1", rollNo: "1HK13PEN01", name: "Mrs Jisha L K", department: "Electronics and Communication Engineering", gender: "FEMALE", registrationDate: "24-10-2013", researchStatus: "Completed-May-2022" },
     { id: "phd2", rollNo: "1HK14PEM01", name: "Mrs Chandrakala H L", department: "Computer Science and Engineering", gender: "FEMALE", registrationDate: "14-03-2014", researchStatus: "Completed-Aug-2023" },
     { id: "phd3", rollNo: "1HK15PBJ01", name: "Mr Subhramanya K C", department: "MBA", gender: "MALE", registrationDate: "06-01-2015", researchStatus: "Completed-May-2022" },
@@ -96,9 +121,12 @@ async function startServer() {
     { id: "phd8", rollNo: "1HK15PEJ05", name: "Mr Mohsin Khan", department: "Computer Science and Engineering", gender: "MALE", registrationDate: "27-07-2015", researchStatus: "Completed-Dec-2019" },
     { id: "phd9", rollNo: "1HK20PCS01", name: "Mrs Bibi Ammena", department: "Computer Science and Engineering", gender: "FEMALE", registrationDate: "31-12-2021", researchStatus: "Pursuing" },
     { id: "phd10", rollNo: "1HK25PCS02", name: "Mrs Husna Tabassum", department: "Computer Science and Engineering", gender: "FEMALE", registrationDate: "31-12-2025", researchStatus: "Pursuing" },
-  ]);
+  ];
 
-  let results: any[] = [
+  let phdStudents = dedupList(loadData(PHD_FILE, defaultPhd), s => String(s.rollNo).trim().toUpperCase());
+
+  // Set up default results
+  const defaultResults: any[] = [
     { id: '1', studentId: '1', rollNo: 'HK-CS-001', studentName: 'John Doe', courseCode: 'CS601', courseName: 'Computer Networks', internalMarks: 28, externalMarks: 62, total: 90, grade: 'S', semester: 6, examDate: '2024-03-15', percentage: 90, classification: 'Distinction', batch: '2021-25' },
     { id: '2', studentId: '1', rollNo: 'HK-CS-001', studentName: 'John Doe', courseCode: 'CS602', courseName: 'Operating Systems', internalMarks: 25, externalMarks: 58, total: 83, grade: 'A', semester: 6, examDate: '2024-03-18', percentage: 83, classification: 'Distinction', batch: '2021-25' },
     { id: '3', studentId: '2', rollNo: 'HK-CS-002', studentName: 'Jane Smith', courseCode: 'CS601', courseName: 'Computer Networks', internalMarks: 29, externalMarks: 65, total: 94, grade: 'S', semester: 6, examDate: '2024-03-15', percentage: 94, classification: 'Distinction', batch: '2021-25' },
@@ -122,10 +150,12 @@ async function startServer() {
     return 'Fail';
   };
 
+  const initialResults = [...defaultResults];
+
   branches.forEach(branch => {
     // Generate Pass
     for(let i=0; i<branch.pass; i++) {
-        results.push({
+        initialResults.push({
             id: `p-${branch.code}-${i}`,
             rollNo: `1HK25${branch.code}${String(i+1).padStart(3, '0')}`,
             studentName: `Student ${branch.code} ${i+1}`,
@@ -138,7 +168,7 @@ async function startServer() {
     }
     // Generate Fail
     for(let i=0; i<branch.fail; i++) {
-        results.push({
+        initialResults.push({
             id: `f-${branch.code}-${i}`,
             rollNo: `1HK25${branch.code}${String(branch.pass+i+1).padStart(3, '0')}`,
             studentName: `Student ${branch.code} ${branch.pass+i+1}`,
@@ -150,6 +180,14 @@ async function startServer() {
         });
     }
   });
+
+  let results = dedupList(loadData(RESULTS_FILE, initialResults), getResultKey);
+
+  // Sync back clean data sets physically to make files permanently healthy
+  saveData(STUDENTS_FILE, students);
+  saveData(PASSOUTS_FILE, passoutStudents);
+  saveData(PHD_FILE, phdStudents);
+  saveData(RESULTS_FILE, results);
 
   interface LogEntry {
     id: string;
@@ -396,10 +434,19 @@ async function startServer() {
           });
       }
 
-      // Add to main state
-      extractedData.forEach(item => {
-        results.unshift(item);
-      });
+      // Add to main state with deduplication keeping newest
+      const combinedResults = [...extractedData, ...results];
+      const uniqueResults: any[] = [];
+      const seenResults = new Set();
+      for (const r of combinedResults) {
+        const key = getResultKey(r);
+        if (key && !seenResults.has(key)) {
+          seenResults.add(key);
+          uniqueResults.push(r);
+        }
+      }
+      results = uniqueResults;
+      saveData(RESULTS_FILE, results);
 
       logs.unshift({
         id: Math.random().toString(36).substr(2, 9),
@@ -539,27 +586,35 @@ async function startServer() {
           });
       }
 
-      // De-duplicate by rollNo
-      const existingRolls = new Set(students.map(s => String(s.rollNo).toUpperCase()));
-      const filteredNewStudents = newStudents.filter(s => !existingRolls.has(String(s.rollNo).toUpperCase()));
-
-      students = [...filteredNewStudents, ...students];
+      // De-duplicate by rollNo keeping newest imported first
+      const combined = [...newStudents, ...students];
+      const uniqueStudents: any[] = [];
+      const seen = new Set();
+      for (const s of combined) {
+        const key = String(s.rollNo).trim().toUpperCase();
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          uniqueStudents.push(s);
+        }
+      }
+      const addedCount = uniqueStudents.length - students.length;
+      students = uniqueStudents;
       saveData(STUDENTS_FILE, students);
 
       logs.unshift({
         id: Math.random().toString(36).substr(2, 9),
         action: 'Student Import',
-        details: `Imported ${filteredNewStudents.length} student records from ${req.file.originalname}`,
+        details: `Imported ${addedCount} new student records from ${req.file.originalname}`,
         timestamp: new Date().toISOString(),
         filename: req.file.originalname
       });
 
       res.json({ 
         success: true, 
-        count: filteredNewStudents.length, 
+        count: addedCount, 
         filename: req.file.originalname,
         logs: [
-          { status: 'SUCCESS', message: `Successfully imported ${filteredNewStudents.length} records.` }
+          { status: 'SUCCESS', message: `Successfully imported ${addedCount} records.` }
         ]
       });
     } catch (error: any) {
@@ -648,27 +703,35 @@ async function startServer() {
           };
         });
 
-      // De-duplicate by rollNo
-      const existingRolls = new Set(passoutStudents.map(s => String(s.rollNo).toUpperCase()));
-      const filteredNewStudents = newStudents.filter(s => !existingRolls.has(String(s.rollNo).toUpperCase()));
-      
-      passoutStudents = [...filteredNewStudents, ...passoutStudents];
+      // De-duplicate by rollNo keeping newest imported first
+      const combined = [...newStudents, ...passoutStudents];
+      const uniquePassouts: any[] = [];
+      const seen = new Set();
+      for (const p of combined) {
+        const key = String(p.rollNo).trim().toUpperCase();
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          uniquePassouts.push(p);
+        }
+      }
+      const addedCount = uniquePassouts.length - passoutStudents.length;
+      passoutStudents = uniquePassouts;
       saveData(PASSOUTS_FILE, passoutStudents);
 
       logs.unshift({
         id: Math.random().toString(36).substr(2, 9),
         action: 'Passout Import',
-        details: `Imported ${filteredNewStudents.length} passout records from ${req.file.originalname}`,
+        details: `Imported ${addedCount} passout records from ${req.file.originalname}`,
         timestamp: new Date().toISOString(),
         filename: req.file.originalname
       });
 
       res.json({ 
         success: true, 
-        count: filteredNewStudents.length, 
+        count: addedCount, 
         filename: req.file.originalname,
         logs: [
-          { status: 'SUCCESS', message: `Successfully imported ${filteredNewStudents.length} passout records.` }
+          { status: 'SUCCESS', message: `Successfully imported ${addedCount} passout records.` }
         ]
       });
     } catch (error: any) {
@@ -749,27 +812,35 @@ async function startServer() {
           };
         });
 
-      // De-duplicate by rollNo
-      const existingRolls = new Set(phdStudents.map((s: any) => String(s.rollNo).toUpperCase()));
-      const filteredNewStudents = newStudents.filter(s => !existingRolls.has(String(s.rollNo).toUpperCase()));
-
-      phdStudents = [...filteredNewStudents, ...phdStudents];
+      // De-duplicate by rollNo keeping newest imported first
+      const combined = [...newStudents, ...phdStudents];
+      const uniquePhd: any[] = [];
+      const seen = new Set();
+      for (const p of combined) {
+        const key = String(p.rollNo).trim().toUpperCase();
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          uniquePhd.push(p);
+        }
+      }
+      const addedCount = uniquePhd.length - phdStudents.length;
+      phdStudents = uniquePhd;
       saveData(PHD_FILE, phdStudents);
 
       logs.unshift({
         id: Math.random().toString(36).substr(2, 9),
         action: 'PHD Import',
-        details: `Imported ${filteredNewStudents.length} PHD scholar records from ${req.file.originalname}`,
+        details: `Imported ${addedCount} PHD scholar records from ${req.file.originalname}`,
         timestamp: new Date().toISOString(),
         filename: req.file.originalname
       });
 
       res.json({ 
         success: true, 
-        count: filteredNewStudents.length, 
+        count: addedCount, 
         filename: req.file.originalname,
         logs: [
-          { status: 'SUCCESS', message: `Successfully imported ${filteredNewStudents.length} PHD records.` }
+          { status: 'SUCCESS', message: `Successfully imported ${addedCount} PHD records.` }
         ]
       });
     } catch (error: any) {
