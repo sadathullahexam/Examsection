@@ -4,9 +4,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import multer from 'multer';
 import * as XLSX from 'xlsx';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pdf = require('pdf-parse');
+import fs from 'fs';
+// @ts-ignore
+import pdf from 'pdf-parse';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,7 +20,6 @@ async function startServer() {
   app.use(express.json());
 
   // In-memory state with persistence
-  const fs = require('fs');
   const DATA_PATH = path.join(process.cwd(), 'data');
   if (!fs.existsSync(DATA_PATH)) fs.mkdirSync(DATA_PATH);
 
