@@ -1,15 +1,11 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import { fileURLToPath } from "url";
 import multer from 'multer';
 import * as XLSX from 'xlsx';
 import fs from 'fs';
 // @ts-ignore
 import pdf from 'pdf-parse';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const upload = multer({ storage: multer.memoryStorage() });
 
