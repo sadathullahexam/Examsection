@@ -1,11 +1,16 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import multer from 'multer';
 import * as XLSX from 'xlsx';
 import fs from 'fs';
-// @ts-ignore
-import pdf from 'pdf-parse';
+import * as pdfParseModule from 'pdf-parse';
+
+async function parsePdf(buffer: Buffer): Promise<{ text: string }> {
+  const parser = new (pdfParseModule as any).PDFParse(new Uint8Array(buffer));
+  await parser.load();
+  const text = await parser.getText();
+  return { text };
+}
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -317,7 +322,7 @@ async function startServer() {
       let extractedData: any[] = [];
 
       if (req.file.mimetype === 'application/pdf') {
-        const data = await pdf(req.file.buffer);
+        const data = await parsePdf(req.file.buffer);
         const text = data.text;
         
         if (text.includes('Result Analysis')) {
@@ -466,7 +471,7 @@ async function startServer() {
       let newStudents: any[] = [];
 
       if (req.file.mimetype === 'application/pdf') {
-        const data = await pdf(req.file.buffer);
+        const data = await parsePdf(req.file.buffer);
         const lines = data.text.split('\n');
         lines.forEach(line => {
           const match = line.match(/(\w+\-\w+\-\d+)\s+([\w\s]+?)\s+([\w\s]+)\s+(\d{4}\-\d{2,4})\s+([\d\.]+)/);
@@ -970,6 +975,7 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
